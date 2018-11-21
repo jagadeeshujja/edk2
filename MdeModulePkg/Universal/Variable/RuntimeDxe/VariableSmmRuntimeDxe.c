@@ -14,6 +14,8 @@
   InitCommunicateBuffer() is really function to check the variable data size.
 
 Copyright (c) 2010 - 2017, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2018, ARM Limited. All rights reserved.<BR>
+
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -179,7 +181,11 @@ SendCommunicateBuffer (
   SMM_VARIABLE_COMMUNICATE_HEADER           *SmmVariableFunctionHeader;
 
   CommSize = DataSize + SMM_COMMUNICATE_HEADER_SIZE + SMM_VARIABLE_COMMUNICATE_HEADER_SIZE;
-  Status = mSmmCommunication->Communicate (mSmmCommunication, mVariableBufferPhysical, &CommSize);
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = mSmmCommunication->Communicate (mSmmCommunication, mVariableBuffer, &CommSize);
+  } else {
+    Status = mSmmCommunication->Communicate (mSmmCommunication, mVariableBufferPhysical, &CommSize);
+  }
   ASSERT_EFI_ERROR (Status);
 
   SmmCommunicateHeader      = (EFI_SMM_COMMUNICATE_HEADER *) mVariableBuffer;
@@ -991,9 +997,11 @@ SmmVariableReady (
 {
   EFI_STATUS                                Status;
 
-  Status = gBS->LocateProtocol (&gEfiSmmVariableProtocolGuid, NULL, (VOID **)&mSmmVariable);
-  if (EFI_ERROR (Status)) {
-    return;
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gBS->LocateProtocol (&gEfiSmmVariableProtocolGuid, NULL, (VOID **)&mSmmVariable);
+    if (EFI_ERROR (Status)) {
+      return;
+    }
   }
 
   Status = gBS->LocateProtocol (&gEfiSmmCommunicationProtocolGuid, NULL, (VOID **) &mSmmCommunication);
@@ -1069,13 +1077,14 @@ SmmVariableWriteReady (
 {
   EFI_STATUS                                Status;
   VOID                                      *ProtocolOps;
-
-  //
-  // Check whether the protocol is installed or not.
-  //
-  Status = gBS->LocateProtocol (&gSmmVariableWriteGuid, NULL, (VOID **) &ProtocolOps);
-  if (EFI_ERROR (Status)) {
-    return;
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    //
+    // Check whether the protocol is installed or not.
+    //
+    Status = gBS->LocateProtocol (&gSmmVariableWriteGuid, NULL, (VOID **) &ProtocolOps);
+    if (EFI_ERROR (Status)) {
+      return;
+    }
   }
 
   //

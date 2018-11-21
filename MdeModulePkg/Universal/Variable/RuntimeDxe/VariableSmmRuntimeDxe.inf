@@ -87,6 +87,9 @@
   ## SOMETIMES_CONSUMES   ## Variable:L"dbt"
   gEfiImageSecurityDatabaseGuid
 
+[Pcd]
+  gEfiMdeModulePkgTokenSpaceGuid.PcdStandaloneMmVariableEnabled
+
 [Depex]
   gEfiSmmCommunicationProtocolGuid
 
