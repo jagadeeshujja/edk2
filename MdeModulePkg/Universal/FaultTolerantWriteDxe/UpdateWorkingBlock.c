@@ -3,6 +3,7 @@
    Internal functions to operate Working Block Space.
 
 Copyright (c) 2006 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2018, ARM Limited. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -57,19 +58,21 @@ InitializeLocalWorkSpaceHeader (
     );
   mWorkingBlockHeader.WriteQueueSize = PcdGet32 (PcdFlashNvStorageFtwWorkingSize) - sizeof (EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER);
 
-  //
-  // Crc is calculated with all the fields except Crc and STATE, so leave them as FTW_ERASED_BYTE.
-  //
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    //
+    // Crc is calculated with all the fields except Crc and STATE, so leave them as FTW_ERASED_BYTE.
+    //
 
-  //
-  // Calculate the Crc of woking block header
-  //
-  Status = gBS->CalculateCrc32 (
-                  &mWorkingBlockHeader,
-                  sizeof (EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER),
-                  &mWorkingBlockHeader.Crc
-                  );
-  ASSERT_EFI_ERROR (Status);
+    //
+    // Calculate the Crc of woking block header
+    //
+    Status = gBS->CalculateCrc32 (
+                    &mWorkingBlockHeader,
+                    sizeof (EFI_FAULT_TOLERANT_WORKING_BLOCK_HEADER),
+                    &mWorkingBlockHeader.Crc
+                    );
+    ASSERT_EFI_ERROR (Status);
+  }
 
   mWorkingBlockHeader.WorkingBlockValid    = FTW_VALID_STATE;
   mWorkingBlockHeader.WorkingBlockInvalid  = FTW_INVALID_STATE;

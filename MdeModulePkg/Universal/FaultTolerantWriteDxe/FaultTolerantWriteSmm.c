@@ -44,6 +44,7 @@
   This driver need to make sure the CommBuffer is not in the SMRAM range.
 
 Copyright (c) 2010 - 2018, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2018, ARM Limited. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -55,13 +56,16 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 **/
 
 #include <PiSmm.h>
+#include <PiMm.h>
 #include <Library/SmmServicesTableLib.h>
 #include <Library/SmmMemLib.h>
+#include <Library/StandaloneMmMemLib.h>
 #include <Library/BaseLib.h>
 #include <Protocol/SmmSwapAddressRange.h>
 #include "FaultTolerantWrite.h"
 #include "FaultTolerantWriteSmmCommon.h"
 #include <Protocol/SmmEndOfDxe.h>
+#include <Library/StandaloneMmServicesTableLib.h>
 
 EFI_EVENT                                 mFvbRegistration = NULL;
 EFI_FTW_DEVICE                            *mFtwDevice      = NULL;
@@ -92,11 +96,19 @@ FtwGetFvbByHandle (
   //
   // To get the SMM FVB protocol interface on the handle
   //
-  return gSmst->SmmHandleProtocol (
-                  FvBlockHandle,
-                  &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                  (VOID **) FvBlock
-                  );
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    return gSmst->SmmHandleProtocol (
+                    FvBlockHandle,
+                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                    (VOID **) FvBlock
+                    );
+  } else {
+    return gMmst->MmHandleProtocol (
+                    FvBlockHandle,
+                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                    (VOID **) FvBlock
+                    );
+  }
 }
 
 /**
@@ -119,11 +131,19 @@ FtwGetSarProtocol (
   //
   // Locate Smm Swap Address Range protocol
   //
-  Status = gSmst->SmmLocateProtocol (
-                    &gEfiSmmSwapAddressRangeProtocolGuid,
-                    NULL,
-                    SarProtocol
-                    );
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmmLocateProtocol (
+                      &gEfiSmmSwapAddressRangeProtocolGuid,
+                      NULL,
+                      SarProtocol
+                      );
+  } else {
+    Status = gMmst->MmLocateProtocol (
+                      &gEfiSmmSwapAddressRangeProtocolGuid,
+                      NULL,
+                      SarProtocol
+                      );
+  }
   return Status;
 }
 
@@ -158,13 +178,23 @@ GetFvbCountAndBuffer (
   BufferSize     = 0;
   *NumberHandles = 0;
   *Buffer        = NULL;
-  Status = gSmst->SmmLocateHandle (
-                    ByProtocol,
-                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                    NULL,
-                    &BufferSize,
-                    *Buffer
-                    );
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  } else {
+    Status = gMmst->MmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  }
   if (EFI_ERROR(Status) && Status != EFI_BUFFER_TOO_SMALL) {
     return EFI_NOT_FOUND;
   }
@@ -173,15 +203,23 @@ GetFvbCountAndBuffer (
   if (*Buffer == NULL) {
     return EFI_OUT_OF_RESOURCES;
   }
-
-  Status = gSmst->SmmLocateHandle (
-                    ByProtocol,
-                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                    NULL,
-                    &BufferSize,
-                    *Buffer
-                    );
-
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  } else {
+    Status = gMmst->MmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  }
   *NumberHandles = BufferSize / sizeof(EFI_HANDLE);
   if (EFI_ERROR(Status)) {
     *NumberHandles = 0;
@@ -335,10 +373,16 @@ SmmFaultTolerantWriteHandler (
     return EFI_SUCCESS;
   }
   CommBufferPayloadSize = TempCommBufferSize - SMM_FTW_COMMUNICATE_HEADER_SIZE;
-
-  if (!SmmIsBufferOutsideSmmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
-    DEBUG ((EFI_D_ERROR, "SmmFtwHandler: SMM communication buffer in SMRAM or overflow!\n"));
-    return EFI_SUCCESS;
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    if (!SmmIsBufferOutsideSmmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
+      DEBUG ((EFI_D_ERROR, "SmmFtwHandler: SMM communication buffer in SMRAM or overflow!\n"));
+      return EFI_SUCCESS;
+    }
+  } else {
+    if (!MmIsBufferOutsideMmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
+      DEBUG ((EFI_D_ERROR, "SmmFtwHandler: SMM communication buffer in SMRAM or overflow!\n"));
+      return EFI_SUCCESS;
+    }
   }
 
   SmmFtwFunctionHeader = (SMM_FTW_COMMUNICATE_FUNCTION_HEADER *)CommBuffer;
@@ -531,11 +575,19 @@ FvbNotificationEvent (
   // Just return to avoid install SMM FaultTolerantWriteProtocol again
   // if SMM Fault Tolerant Write protocol had been installed.
   //
-  Status = gSmst->SmmLocateProtocol (
-                    &gEfiSmmFaultTolerantWriteProtocolGuid,
-                    NULL,
-                    (VOID **) &FtwProtocol
-                    );
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmmLocateProtocol (
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      NULL,
+                      (VOID **) &FtwProtocol
+                      );
+  } else {
+    Status = gMmst->MmLocateProtocol (
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      NULL,
+                      (VOID **) &FtwProtocol
+                      );
+  }
   if (!EFI_ERROR (Status)) {
     return EFI_SUCCESS;
   }
@@ -551,31 +603,45 @@ FvbNotificationEvent (
   //
   // Install protocol interface
   //
-  Status = gSmst->SmmInstallProtocolInterface (
-                    &mFtwDevice->Handle,
-                    &gEfiSmmFaultTolerantWriteProtocolGuid,
-                    EFI_NATIVE_INTERFACE,
-                    &mFtwDevice->FtwInstance
-                    );
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmmInstallProtocolInterface (
+                      &mFtwDevice->Handle,
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      EFI_NATIVE_INTERFACE,
+                      &mFtwDevice->FtwInstance
+                      );
+  } else {
+    Status = gMmst->MmInstallProtocolInterface (
+                      &mFtwDevice->Handle,
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      EFI_NATIVE_INTERFACE,
+                      &mFtwDevice->FtwInstance
+                      );
+  }
   ASSERT_EFI_ERROR (Status);
 
   ///
   /// Register SMM FTW SMI handler
   ///
-  Status = gSmst->SmiHandlerRegister (SmmFaultTolerantWriteHandler, &gEfiSmmFaultTolerantWriteProtocolGuid, &SmmFtwHandle);
-  ASSERT_EFI_ERROR (Status);
+  if (!PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gSmst->SmiHandlerRegister (SmmFaultTolerantWriteHandler, &gEfiSmmFaultTolerantWriteProtocolGuid, &SmmFtwHandle);
+    ASSERT_EFI_ERROR (Status);
 
-  //
-  // Notify the Ftw wrapper driver SMM Ftw is ready
-  //
-  FtwHandle = NULL;
-  Status = gBS->InstallProtocolInterface (
+    //
+    // Notify the Ftw wrapper driver SMM Ftw is ready
+    //
+    FtwHandle = NULL;
+    Status = gBS->InstallProtocolInterface (
                   &FtwHandle,
                   &gEfiSmmFaultTolerantWriteProtocolGuid,
                   EFI_NATIVE_INTERFACE,
                   NULL
                   );
-  ASSERT_EFI_ERROR (Status);
+    ASSERT_EFI_ERROR (Status);
+  } else {
+    Status = gMmst->MmiHandlerRegister (SmmFaultTolerantWriteHandler, &gEfiSmmFaultTolerantWriteProtocolGuid, &SmmFtwHandle);
+    ASSERT_EFI_ERROR (Status);
+  }
 
   return EFI_SUCCESS;
 }
@@ -645,6 +711,45 @@ SmmFaultTolerantWriteInitialize (
   // Register FvbNotificationEvent () notify function.
   //
   Status = gSmst->SmmRegisterProtocolNotify (
+                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                    FvbNotificationEvent,
+                    &mFvbRegistration
+                    );
+  ASSERT_EFI_ERROR (Status);
+
+  FvbNotificationEvent (NULL, NULL, NULL);
+
+  return EFI_SUCCESS;
+}
+
+/**
+  This function is the entry point of the Fault Tolerant Write driver.
+
+  @param[in] ImageHandle        A handle for the image that is initializing this driver
+  @param[in] SystemTable        A pointer to the EFI system table
+
+  @retval EFI_SUCCESS           The initialization finished successfully.
+  @retval EFI_OUT_OF_RESOURCES  Allocate memory error
+  @retval EFI_INVALID_PARAMETER Workspace or Spare block does not exist
+
+**/
+EFI_STATUS
+EFIAPI
+StandaloneMmFaultTolerantWriteInitialize (
+  IN EFI_HANDLE                           ImageHandle,
+  IN EFI_MM_SYSTEM_TABLE                  *SystemTable
+  )
+{
+  EFI_STATUS                              Status;
+
+  //
+  // Allocate private data structure for SMM FTW protocol and do some initialization
+  //
+  Status = InitFtwDevice (&mFtwDevice);
+  if (EFI_ERROR(Status)) {
+    return Status;
+  }
+  Status = gMmst->MmRegisterProtocolNotify (
                     &gEfiSmmFirmwareVolumeBlockProtocolGuid,
                     FvbNotificationEvent,
                     &mFvbRegistration
