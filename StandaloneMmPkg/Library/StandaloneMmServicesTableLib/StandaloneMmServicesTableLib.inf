@@ -1,0 +1,36 @@
+## @file
+# MM Core MM Services Table Library.
+#
+# Copyright (c) 2015, Intel Corporation. All rights reserved.<BR>
+# Copyright (c) 2016 - 2018, ARM Limited. All rights reserved.<BR>
+#
+#  This program and the accompanying materials
+#  are licensed and made available under the terms and conditions of the BSD License
+#  which accompanies this distribution. The full text of the license may be found at
+#  http://opensource.org/licenses/bsd-license.php
+#  THE PROGRAM IS DISTRIBUTED UNDER THE BSD LICENSE ON AN "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
+#
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = StandaloneMmServicesTableLib
+  FILE_GUID                      = BEE33A2F-F49D-4B71-AF3E-FFCCB9885DEA
+  MODULE_TYPE                    = MM_STANDALONE
+  VERSION_STRING                 = 1.0
+  PI_SPECIFICATION_VERSION       = 0x00010032
+  LIBRARY_CLASS                  = MmServicesTableLib|MM_STANDALONE
+  CONSTRUCTOR                    = StandaloneMmServicesTableLibConstructor
+
+#
+#  VALID_ARCHITECTURES           = IA32 X64 AARCH64
+#
+
+[Sources]
+  StandaloneMmServicesTableLib.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+
