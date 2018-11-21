@@ -15,6 +15,7 @@
   SmmVariableGetStatistics() should also do validation based on its own knowledge.
 
 Copyright (c) 2010 - 2016, Intel Corporation. All rights reserved.<BR>
+Copyright (c) 2018, ARM Limited. All rights reserved.<BR>
 This program and the accompanying materials
 are licensed and made available under the terms and conditions of the BSD License
 which accompanies this distribution.  The full text of the license may be found at
@@ -34,6 +35,8 @@ WITHOUT WARRANTIES OR REPRESENTATIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED.
 #include <Library/SmmServicesTableLib.h>
 #include <Library/SmmMemLib.h>
 
+#include <Library/StandaloneMmMemLib.h>
+#include <Library/StandaloneMmServicesTableLib.h>
 #include <Guid/SmmVariableCommon.h>
 #include "Variable.h"
 
@@ -218,11 +221,19 @@ GetFtwProtocol (
   //
   // Locate Smm Fault Tolerent Write protocol
   //
-  Status = gSmst->SmmLocateProtocol (
-                    &gEfiSmmFaultTolerantWriteProtocolGuid,
-                    NULL,
-                    FtwProtocol
-                    );
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gMmst->MmLocateProtocol (
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      NULL,
+                      FtwProtocol
+                      );
+  } else {
+    Status = gSmst->SmmLocateProtocol (
+                      &gEfiSmmFaultTolerantWriteProtocolGuid,
+                      NULL,
+                      FtwProtocol
+                      );
+  }
   return Status;
 }
 
@@ -248,11 +259,19 @@ GetFvbByHandle (
   //
   // To get the SMM FVB protocol interface on the handle
   //
-  return gSmst->SmmHandleProtocol (
-                  FvBlockHandle,
-                  &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                  (VOID **) FvBlock
-                  );
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    return gMmst->MmHandleProtocol (
+                    FvBlockHandle,
+                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                    (VOID **) FvBlock
+                    );
+  } else {
+    return gSmst->SmmHandleProtocol (
+                    FvBlockHandle,
+                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                    (VOID **) FvBlock
+                    );
+  }
 }
 
 
@@ -287,13 +306,23 @@ GetFvbCountAndBuffer (
   BufferSize     = 0;
   *NumberHandles = 0;
   *Buffer        = NULL;
-  Status = gSmst->SmmLocateHandle (
-                    ByProtocol,
-                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                    NULL,
-                    &BufferSize,
-                    *Buffer
-                    );
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gMmst->MmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  } else {
+    Status = gSmst->SmmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  }
   if (EFI_ERROR(Status) && Status != EFI_BUFFER_TOO_SMALL) {
     return EFI_NOT_FOUND;
   }
@@ -303,14 +332,23 @@ GetFvbCountAndBuffer (
     return EFI_OUT_OF_RESOURCES;
   }
 
-  Status = gSmst->SmmLocateHandle (
-                    ByProtocol,
-                    &gEfiSmmFirmwareVolumeBlockProtocolGuid,
-                    NULL,
-                    &BufferSize,
-                    *Buffer
-                    );
-
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+     Status = gMmst->MmLocateHandle (
+                       ByProtocol,
+                       &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                       NULL,
+                       &BufferSize,
+                       *Buffer
+                       );
+  } else {
+    Status = gSmst->SmmLocateHandle (
+                      ByProtocol,
+                      &gEfiSmmFirmwareVolumeBlockProtocolGuid,
+                      NULL,
+                      &BufferSize,
+                      *Buffer
+                      );
+  }
   *NumberHandles = BufferSize / sizeof(EFI_HANDLE);
   if (EFI_ERROR(Status)) {
     *NumberHandles = 0;
@@ -499,10 +537,16 @@ SmmVariableHandler (
     DEBUG ((EFI_D_ERROR, "SmmVariableHandler: SMM communication buffer payload size invalid!\n"));
     return EFI_SUCCESS;
   }
-
-  if (!SmmIsBufferOutsideSmmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
-    DEBUG ((EFI_D_ERROR, "SmmVariableHandler: SMM communication buffer in SMRAM or overflow!\n"));
-    return EFI_SUCCESS;
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    if (!MmIsBufferOutsideMmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
+      DEBUG ((EFI_D_ERROR, "SmmVariableHandler: SMM communication buffer in SMRAM or overflow!\n"));
+      return EFI_SUCCESS;
+    }
+  } else {
+    if (!SmmIsBufferOutsideSmmValid ((UINTN)CommBuffer, TempCommBufferSize)) {
+      DEBUG ((EFI_D_ERROR, "SmmVariableHandler: SMM communication buffer in SMRAM or overflow!\n"));
+      return EFI_SUCCESS;
+    }
   }
 
   SmmVariableFunctionHeader = (SMM_VARIABLE_COMMUNICATE_HEADER *)CommBuffer;
@@ -691,13 +735,17 @@ SmmVariableHandler (
         break;
       }
       if (!mEndOfDxe) {
-        MorLockInitAtEndOfDxe ();
-        mEndOfDxe = TRUE;
-        VarCheckLibInitializeAtEndOfDxe (NULL);
-        //
-        // The initialization for variable quota.
-        //
-        InitializeVariableQuota ();
+        if (!PcdGetBool (PcdStandaloneMmVariableEnabled)){
+          MorLockInitAtEndOfDxe ();
+          mEndOfDxe = TRUE;
+          VarCheckLibInitializeAtEndOfDxe (NULL);
+          //
+          // The initialization for variable quota.
+          //
+          InitializeVariableQuota ();
+        } else {
+          mEndOfDxe = TRUE;
+        }
       }
       ReclaimForOS ();
       Status = EFI_SUCCESS;
@@ -911,12 +959,22 @@ SmmFtwNotificationEvent (
   //
   // Notify the variable wrapper driver the variable write service is ready
   //
-  Status = gBS->InstallProtocolInterface (
-                  &mSmmVariableHandle,
-                  &gSmmVariableWriteGuid,
-                  EFI_NATIVE_INTERFACE,
-                  NULL
-                  );
+  if (PcdGetBool (PcdStandaloneMmVariableEnabled)) {
+    Status = gMmst->MmInstallProtocolInterface (
+                      &mSmmVariableHandle,
+                      &gSmmVariableWriteGuid,
+                      EFI_NATIVE_INTERFACE,
+                      NULL
+                      );
+  } else {
+    Status = gBS->InstallProtocolInterface (
+                    &mSmmVariableHandle,
+                    &gSmmVariableWriteGuid,
+                    EFI_NATIVE_INTERFACE,
+                    NULL
+                    );
+  }
+
   ASSERT_EFI_ERROR (Status);
 
   return EFI_SUCCESS;
@@ -1026,4 +1084,63 @@ VariableServiceInitialize (
   return EFI_SUCCESS;
 }
 
+/**
+  Variable Driver main entry point. The Variable driver places the 4 EFI
+  runtime services in the EFI System Table and installs arch protocols
+  for variable read and write services being available. It also registers
+  a notification function for an EVT_SIGNAL_VIRTUAL_ADDRESS_CHANGE event.
+
+  @param[in] ImageHandle    The firmware allocated handle for the EFI image.
+  @param[in] SystemTable    A pointer to the EFI System Table.
+
+  @retval EFI_SUCCESS       Variable service successfully initialized.
+
+**/
+EFI_STATUS
+EFIAPI
+StandaloneMmVariableServiceInitialize (
+  IN EFI_HANDLE                           ImageHandle,
+  IN EFI_MM_SYSTEM_TABLE                     *SystemTable
+  )
+{
+  EFI_STATUS                              Status;
+  EFI_HANDLE                              VariableHandle;
+  VOID                                    *SmmFtwRegistration;
+
+  //
+  // Variable initialize.
+  //
+  Status = VariableCommonInitialize ();
+  ASSERT_EFI_ERROR (Status);
+
+  mVariableBufferPayloadSize = GetMaxVariableSize () +
+                               OFFSET_OF (SMM_VARIABLE_COMMUNICATE_VAR_CHECK_VARIABLE_PROPERTY, Name) - GetVariableHeaderSize ();
+
+  Status = gMmst->MmAllocatePool (
+                    EfiRuntimeServicesData,
+                    mVariableBufferPayloadSize,
+                    (VOID **)&mVariableBufferPayload
+                    );
+  ASSERT_EFI_ERROR (Status);
+
+  ///
+  /// Register SMM variable SMI handler
+  ///
+  VariableHandle = NULL;
+  Status = gMmst->MmiHandlerRegister (SmmVariableHandler, &gEfiSmmVariableProtocolGuid, &VariableHandle);
+  ASSERT_EFI_ERROR (Status);
+  //
+  // Register FtwNotificationEvent () notify function.
+  //
+  Status = gMmst->MmRegisterProtocolNotify (
+                    &gEfiSmmFaultTolerantWriteProtocolGuid,
+                    SmmFtwNotificationEvent,
+                    &SmmFtwRegistration
+                    );
+  ASSERT_EFI_ERROR (Status);
+
+  SmmFtwNotificationEvent (NULL, NULL, NULL);
+
+  return EFI_SUCCESS;
+}
 
