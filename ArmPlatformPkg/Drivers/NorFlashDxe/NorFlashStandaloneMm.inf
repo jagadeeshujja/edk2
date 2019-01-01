@@ -2,7 +2,7 @@
 #
 #  Component description file for NorFlashDxe module
 #
-#  Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
+#  Copyright (c) 2018, ARM Limited. All rights reserved.
 #
 #  This program and the accompanying materials
 #  are licensed and made available under the terms and conditions of the BSD License
@@ -16,14 +16,15 @@
 
 [Defines]
   INF_VERSION                    = 0x00010005
-  BASE_NAME                      = ArmVeNorFlashDxe
-  FILE_GUID                      = 93E34C7E-B50E-11DF-9223-2443DFD72085
-  MODULE_TYPE                    = DXE_RUNTIME_DRIVER
+  BASE_NAME                      = StandaloneMmNorFlash
+  FILE_GUID                      = 166F677B-DAC9-4AE4-AD34-2FF2504B0637
+  MODULE_TYPE                    = MM_STANDALONE
   VERSION_STRING                 = 1.0
-  ENTRY_POINT                    = NorFlashInitialise
+  PI_SPECIFICATION_VERSION       = 0x00010032
+  ENTRY_POINT                    = StandaloneMmNorFlashInitialise
 
 [Sources.common]
-  NorFlashDxe.c
+  NorFlashStandaloneMm.c
   NorFlashFvbDxe.c
   NorFlashBlockIoDxe.c
 
@@ -32,19 +33,21 @@
   MdeModulePkg/MdeModulePkg.dec
   ArmPlatformPkg/ArmPlatformPkg.dec
   EmbeddedPkg/EmbeddedPkg.dec
+  ArmPkg/ArmPkg.dec
+  StandaloneMmPkg/StandaloneMmPkg.dec
 
 [LibraryClasses]
+  StandaloneMmDriverEntryPoint
+  BaseMemoryLib
+  ArmSvcLib
+  ArmLib
   IoLib
   BaseLib
   DebugLib
   HobLib
+  MemoryAllocationLib
   NorFlashPlatformLib
-  UefiLib
-  UefiDriverEntryPoint
-  UefiBootServicesTableLib
-  UefiRuntimeLib
-  DxeServicesTableLib
-  StandaloneMmServicesTableLib
+  MmServicesTableLib
 
 [Guids]
   gEfiSystemNvDataFvGuid
@@ -56,9 +59,8 @@
 [Protocols]
   gEfiBlockIoProtocolGuid
   gEfiDevicePathProtocolGuid
-  gEfiFirmwareVolumeBlockProtocolGuid
-  gEfiDiskIoProtocolGuid
   gEfiSmmFirmwareVolumeBlockProtocolGuid
+  gEfiDiskIoProtocolGuid
 
 [Pcd.common]
   gEfiMdeModulePkgTokenSpaceGuid.PcdFlashNvStorageVariableBase
@@ -71,4 +73,4 @@
   gArmPlatformTokenSpaceGuid.PcdNorFlashCheckBlockLocked
 
 [Depex]
-  gEfiCpuArchProtocolGuid
+  TRUE

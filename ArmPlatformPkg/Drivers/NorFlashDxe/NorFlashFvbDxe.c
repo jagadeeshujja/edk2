@@ -1,6 +1,6 @@
 /*++ @file  NorFlashFvbDxe.c
 
- Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
+ Copyright (c) 2011 - 2019, ARM Ltd. All rights reserved.<BR>
 
  This program and the accompanying materials
  are licensed and made available under the terms and conditions of the BSD License
@@ -720,27 +720,29 @@ NorFlashFvbInitialize (
   DEBUG((DEBUG_BLKIO,"NorFlashFvbInitialize\n"));
   ASSERT((Instance != NULL));
 
-  //
-  // Declare the Non-Volatile storage as EFI_MEMORY_RUNTIME
-  //
+  if (!InMm ()) {
+    //
+    // Declare the Non-Volatile storage as EFI_MEMORY_RUNTIME
+    //
 
-  // Note: all the NOR Flash region needs to be reserved into the UEFI Runtime memory;
-  //       even if we only use the small block region at the top of the NOR Flash.
-  //       The reason is when the NOR Flash memory is set into program mode, the command
-  //       is written as the base of the flash region (ie: Instance->DeviceBaseAddress)
-  RuntimeMmioRegionSize = (Instance->RegionBaseAddress - Instance->DeviceBaseAddress) + Instance->Size;
+    // Note: all the NOR Flash region needs to be reserved into the UEFI Runtime memory;
+    //       even if we only use the small block region at the top of the NOR Flash.
+    //       The reason is when the NOR Flash memory is set into program mode, the command
+    //       is written as the base of the flash region (ie: Instance->DeviceBaseAddress)
+    RuntimeMmioRegionSize = (Instance->RegionBaseAddress - Instance->DeviceBaseAddress) + Instance->Size;
 
-  Status = gDS->AddMemorySpace (
-      EfiGcdMemoryTypeMemoryMappedIo,
-      Instance->DeviceBaseAddress, RuntimeMmioRegionSize,
-      EFI_MEMORY_UC | EFI_MEMORY_RUNTIME
-      );
-  ASSERT_EFI_ERROR (Status);
+    Status = gDS->AddMemorySpace (
+        EfiGcdMemoryTypeMemoryMappedIo,
+        Instance->DeviceBaseAddress, RuntimeMmioRegionSize,
+        EFI_MEMORY_UC | EFI_MEMORY_RUNTIME
+        );
+    ASSERT_EFI_ERROR (Status);
 
-  Status = gDS->SetMemorySpaceAttributes (
-      Instance->DeviceBaseAddress, RuntimeMmioRegionSize,
-      EFI_MEMORY_UC | EFI_MEMORY_RUNTIME);
-  ASSERT_EFI_ERROR (Status);
+    Status = gDS->SetMemorySpaceAttributes (
+        Instance->DeviceBaseAddress, RuntimeMmioRegionSize,
+        EFI_MEMORY_UC | EFI_MEMORY_RUNTIME);
+    ASSERT_EFI_ERROR (Status);
+  }
 
   mFlashNvStorageVariableBase = FixedPcdGet32 (PcdFlashNvStorageVariableBase);
 
@@ -777,30 +779,32 @@ NorFlashFvbInitialize (
     }
   }
 
-  //
-  // The driver implementing the variable read service can now be dispatched;
-  // the varstore headers are in place.
-  //
-  Status = gBS->InstallProtocolInterface (
-                  &gImageHandle,
-                  &gEdkiiNvVarStoreFormattedGuid,
-                  EFI_NATIVE_INTERFACE,
-                  NULL
-                  );
-  ASSERT_EFI_ERROR (Status);
+  if (!InMm ()) {
+    //
+    // The driver implementing the variable read service can now be dispatched;
+    // the varstore headers are in place.
+    //
+    Status = gBS->InstallProtocolInterface (
+                    &gImageHandle,
+                    &gEdkiiNvVarStoreFormattedGuid,
+                    EFI_NATIVE_INTERFACE,
+                    NULL
+                    );
+    ASSERT_EFI_ERROR (Status);
 
-  //
-  // Register for the virtual address change event
-  //
-  Status = gBS->CreateEventEx (
-                  EVT_NOTIFY_SIGNAL,
-                  TPL_NOTIFY,
-                  FvbVirtualNotifyEvent,
-                  NULL,
-                  &gEfiEventVirtualAddressChangeGuid,
-                  &mFvbVirtualAddrChangeEvent
-                  );
-  ASSERT_EFI_ERROR (Status);
+    //
+    // Register for the virtual address change event
+    //
+    Status = gBS->CreateEventEx (
+                    EVT_NOTIFY_SIGNAL,
+                    TPL_NOTIFY,
+                    FvbVirtualNotifyEvent,
+                    NULL,
+                    &gEfiEventVirtualAddressChangeGuid,
+                    &mFvbVirtualAddrChangeEvent
+                    );
+    ASSERT_EFI_ERROR (Status);
+  }
 
   return Status;
 }

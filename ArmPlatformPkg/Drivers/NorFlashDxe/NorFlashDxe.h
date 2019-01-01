@@ -1,6 +1,6 @@
 /** @file  NorFlashDxe.h
 
-  Copyright (c) 2011 - 2014, ARM Ltd. All rights reserved.<BR>
+  Copyright (c) 2011 - 2019, ARM Ltd. All rights reserved.<BR>
 
   This program and the accompanying materials
   are licensed and made available under the terms and conditions of the BSD License
@@ -19,6 +19,7 @@
 #include <Base.h>
 #include <PiDxe.h>
 
+#include <PiMm.h>
 #include <Guid/EventGroup.h>
 
 #include <Protocol/BlockIo.h>
@@ -30,6 +31,7 @@
 #include <Library/NorFlashPlatformLib.h>
 #include <Library/UefiLib.h>
 #include <Library/UefiRuntimeLib.h>
+#include <Library/StandaloneMmServicesTableLib.h>
 
 #define NOR_FLASH_ERASE_RETRY                     10
 
